@@ -3,3 +3,9 @@ runs_ncsn/**/figures/
 runs_ncsn/**/train_loss.npy
 runs_ncsn/**/MSE.npy
 runs_ncsn/**/ER.npy
+
+
+runs_ncsn/
+*.pt
+*.pth
+*.ckpt
