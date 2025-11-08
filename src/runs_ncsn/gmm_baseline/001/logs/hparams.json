@@ -1,0 +1,41 @@
+{
+    "batch_size": 512,
+    "N_train": 40000,
+    "EVAL_EVERY": 5000,
+    "lr": 0.0001,
+    "EPS_TRAINNING": false,
+    "sigma": {
+        "schedule": "log",
+        "min": 0.1,
+        "max": 5,
+        "n_sigmas": 10,
+        "values": [
+            5.0,
+            3.237394094467163,
+            2.096143960952759,
+            1.3572087287902832,
+            0.8787639141082764,
+            0.5689810514450073,
+            0.3684031665325165,
+            0.23853324353694916,
+            0.15444521605968475,
+            0.10000000149011612
+        ]
+    },
+    "ALD": {
+        "prior_mean": [
+            0.0,
+            0.0
+        ],
+        "prior_cov_scalar": 10.0,
+        "step_size": 0.2,
+        "T": 3000,
+        "n_chain": 2000
+    },
+    "device": "mps",
+    "model": {
+        "hidden_dim": 512,
+        "sigma_emb_dim": 20
+    },
+    "plot scores renormalisation": "0.5 + 25*i/n_sigma"
+}
