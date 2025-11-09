@@ -9,3 +9,6 @@ runs_ncsn/
 *.pt
 *.pth
 *.ckpt
+
+src/data/
+
