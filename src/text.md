@@ -18,3 +18,8 @@ métrique : visuel + on regarde l'erreur relative : MSE / E[target] avec E[targe
 epsiolon loss : pour Être indépendant de sigma.
 
 démarer avec sigma min haut et initialiser avec plus à chaque fois
+
+### On passe sur les images : 
+quelques différence : 
+
+les images sont dans [-1;1] ^ c*h*w  donc c'est bornée. je penses que dans le langevin faut clip sinon il sort totalement de sa zone d'entrainement.
