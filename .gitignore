@@ -33,3 +33,7 @@ src/ncsn/gmm/runs/
 # Dossiers de tests / poubelle
 #######################
 src/trashtest/
+
+
+
+src/ncsn/mnist/runs/
