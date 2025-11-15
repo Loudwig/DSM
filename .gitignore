@@ -1,14 +1,35 @@
-runs_ncsn/**/weights/
-runs_ncsn/**/figures/
-runs_ncsn/**/train_loss.npy
-runs_ncsn/**/MSE.npy
-runs_ncsn/**/ER.npy
+#######################
+# Python / général
+#######################
+**/__pycache__/
+*.py[cod]
+*.pyo
 
+# Notebooks
+**/.ipynb_checkpoints/
 
-runs_ncsn/
-*.pt
-*.pth
-*.ckpt
+#######################
+# Données brutes (MNIST)
+#######################
+src/ncsn/mnist/data/
 
-src/data/
+#######################
+# Résultats d'expériences NCSN GMM
+#######################
 
+# Frames temporaires pour les vidéos GMM
+src/ncsn/gmm/out/
+
+# Tous les runs (logs, modèles, figures, vidéos)
+src/ncsn/gmm/runs/**/weights/
+src/ncsn/gmm/runs/**/figures/
+src/ncsn/gmm/runs/**/videos/out/
+src/ncsn/gmm/runs/**/videos/*.mp4
+
+# Garder hparams.json, ignorer les arrays numpy
+src/ncsn/gmm/runs/
+
+#######################
+# Dossiers de tests / poubelle
+#######################
+src/trashtest/
