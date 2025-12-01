@@ -41,3 +41,6 @@ src/ncsn/mnist/runs/
 src/ncsn/celebA/data/
 
 src/ncsn/celebA/runs/
+
+runs_ncsn/
+data/
