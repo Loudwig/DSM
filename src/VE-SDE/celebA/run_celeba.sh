@@ -29,7 +29,7 @@ SIGMA_EMB_DIM=16
 IMG_SIZE=100
 
 # Model hyperparameters
-BASE_CH=124
+BASE_CH=128
 CHANNEL_MULTS="1,2,2,4,4"
 
 # ---- Env ----
