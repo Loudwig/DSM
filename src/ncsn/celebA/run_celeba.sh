@@ -4,7 +4,7 @@
 #SBATCH --error=runs/%x_%j.err       # stderr goes to runs/<job>_<id>.err
 #SBATCH --partition=P100
 #SBATCH --gres=gpu:1
-#SBATCH --time=07:00:00
+#SBATCH --time=20:00:00
 
 echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
@@ -14,22 +14,23 @@ mkdir -p runs
 
 # ---- Hyperparameters ----
 LR="1e-4"
-EPOCHS=20
-BATCH_SIZE=64
-EXP_NAME="debugging"
+EPOCHS=40
+BATCH_SIZE=32
+EXP_NAME="comparaison"
 EVAL_EVERY=100
 NUM_WORKERS=4
-GRAD_CLIP=0  # 0 pour désactiver
+GRAD_CLIP=1  # 0 pour désactiver
 
 # Sigma hyperparameters
-SIGMA_MIN="1e-1"
-SIGMA_MAX="0.5"
-N_SIGMAS=10
-SIGMA_SCHEDULE="lin"
+SIGMA_MIN="1e-2"
+SIGMA_MAX="1.5"
+N_SIGMAS=20
+SIGMA_SCHEDULE="log"
 
+IMG_SIZE=64
 # Model hyperparameters
-BASE_CH=64
-CHANNEL_MULTS="1,2,4,8"
+BASE_CH=128
+CHANNEL_MULTS="1,2,2,4,4"
 
 # ---- Env ----
 source ~/.venvs/testpip/bin/activate
@@ -51,6 +52,7 @@ srun python -u train.py \
   --n-sigmas "$N_SIGMAS" \
   --sigma-schedule "$SIGMA_SCHEDULE" \
   --base-ch "$BASE_CH" \
-  --channel-mults "$CHANNEL_MULTS"
+  --channel-mults "$CHANNEL_MULTS"\
+  --img-size "$IMG_SIZE"
 
 echo "Job finished at: $(date)"

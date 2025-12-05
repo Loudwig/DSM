@@ -123,7 +123,7 @@ class SmallUNetSigma(nn.Module):
 
         # ----- BOTTLENECK -----
         self.mid_block1 = ResBlock(curr_ch, curr_ch, emb_dim)
-
+        self.mid_block2 = ResBlock(curr_ch,curr_ch,emb_dim)
 
         # ----- DECODER -----
         self.up_samples = nn.ModuleList()
@@ -181,7 +181,7 @@ class SmallUNetSigma(nn.Module):
 
         # ----- BOTTLENECK -----
         h = self.mid_block1(h, emb)
-
+        h = self.mid_block2(h,emb)
         # ----- DECODE -----
         # on consomme les skips du plus profond au plus proche de l'entrée
         for up, block in zip(self.up_samples, self.up_blocks):

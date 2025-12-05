@@ -110,10 +110,12 @@ def get_args():
     parser.add_argument("--n-sigmas", type=int, default=10)
     parser.add_argument("--sigma-schedule", type=str, default="lin",
                         choices=["lin", "log"])
-
+    
     # Model hyperparameters
     parser.add_argument("--base-ch", type=int, default=64)
     parser.add_argument("--channel-mults", type=str, default="1,2,4")
+    parser.add_argument("--img-size",type=int,default=32)
+
 
     return parser.parse_args()
 
@@ -194,10 +196,13 @@ def main(args):
                 except Exception as e:
                     print(f"Could not move {src} to {dst}: {e}")
 
+    
+    
     # Dataset
+    img_size = args.img_size
     transform = transforms.Compose([
         transforms.CenterCrop(178),
-        transforms.Resize(128),
+        transforms.Resize(img_size),
         transforms.ToTensor(),
         transforms.Lambda(lambda x: x * 2 - 1)
     ])
@@ -255,7 +260,6 @@ def main(args):
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # si tu veux du weight decay: remplace par AdamW(..., weight_decay=1e-4)
 
     # Save hyperparams
     if SAVE:
@@ -265,6 +269,7 @@ def main(args):
             "EVAL_EVERY": EVAL_EVERY,
             "lr": lr,
             "grad_clip": grad_clip,
+            'img_size' : img_size,
             "sigma": {
                 "schedule": sigma_schedule,
                 "min": sigma_min,
