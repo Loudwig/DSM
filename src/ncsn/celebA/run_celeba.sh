@@ -4,7 +4,7 @@
 #SBATCH --error=runs/%x_%j.err       # stderr goes to runs/<job>_<id>.err
 #SBATCH --partition=P100
 #SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00
+#SBATCH --time=20:00:00
 
 echo "Starting job on node: $(hostname)"
 echo "Job started at: $(date)"
@@ -16,7 +16,7 @@ mkdir -p runs
 LR="1e-4"
 EPOCHS=40
 BATCH_SIZE=32
-EXP_NAME="debugging"
+EXP_NAME="comparaison"
 EVAL_EVERY=100
 NUM_WORKERS=4
 GRAD_CLIP=1  # 0 pour désactiver
@@ -53,5 +53,6 @@ srun python -u train.py \
   --sigma-schedule "$SIGMA_SCHEDULE" \
   --base-ch "$BASE_CH" \
   --channel-mults "$CHANNEL_MULTS"\
-  --img-size "$IMG_SIZE"\
+  --img-size "$IMG_SIZE"
+
 echo "Job finished at: $(date)"

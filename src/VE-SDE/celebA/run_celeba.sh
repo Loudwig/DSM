@@ -14,9 +14,9 @@ mkdir -p runs
 
 # ---- Hyperparameters ----
 LR="1e-4"
-EPOCHS=60
+EPOCHS=40
 BATCH_SIZE=32
-EXP_NAME="baseline"
+EXP_NAME="comparaison"
 EVAL_EVERY=100
 NUM_WORKERS=4
 GRAD_CLIP=1  # 0 pour désactiver
