@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=celebA_trainning
+#SBATCH --job-name=mnist_ncsn
 #SBATCH --output=runs/%x_%j.out      # stdout goes to runs/<job>_<id>.out
 #SBATCH --error=runs/%x_%j.err       # stderr goes to runs/<job>_<id>.err
 #SBATCH --partition=P100
@@ -15,8 +15,8 @@ mkdir -p runs
 # ---- Hyperparameters ----
 LR="1e-4"
 EPOCHS=40
-BATCH_SIZE=32
-EXP_NAME="debugging"
+BATCH_SIZE=64
+EXP_NAME="comparaison"
 EVAL_EVERY=100
 NUM_WORKERS=4
 GRAD_CLIP=1  # 0 pour désactiver
@@ -24,12 +24,11 @@ GRAD_CLIP=1  # 0 pour désactiver
 # Sigma hyperparameters
 SIGMA_MIN="1e-2"
 SIGMA_MAX="1.5"
-N_SIGMAS=20
-SIGMA_SCHEDULE="log"
+N_SIGMAS=10
+SIGMA_SCHEDULE="lin"   # ou "log"
 
-IMG_SIZE=64
 # Model hyperparameters
-BASE_CH=128
+BASE_CH=64
 CHANNEL_MULTS="1,2,2,4,4"
 
 # ---- Env ----
@@ -52,6 +51,6 @@ srun python -u train.py \
   --n-sigmas "$N_SIGMAS" \
   --sigma-schedule "$SIGMA_SCHEDULE" \
   --base-ch "$BASE_CH" \
-  --channel-mults "$CHANNEL_MULTS"\
-  --img-size "$IMG_SIZE"\
+  --channel-mults "$CHANNEL_MULTS"
+
 echo "Job finished at: $(date)"

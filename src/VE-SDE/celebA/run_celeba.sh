@@ -26,7 +26,7 @@ SIGMA_MIN="1e-2"
 SIGMA_MAX="1.5"
 
 SIGMA_EMB_DIM=16
-IMG_SIZE=100
+IMG_SIZE=64
 
 # Model hyperparameters
 BASE_CH=128
