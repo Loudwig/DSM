@@ -14,7 +14,7 @@ mkdir -p runs
 
 # ---- Hyperparameters ----
 LR="1e-4"
-EPOCHS=40
+EPOCHS=60
 BATCH_SIZE=32
 EXP_NAME="comparaison"
 EVAL_EVERY=100
@@ -23,14 +23,14 @@ GRAD_CLIP=1  # 0 pour désactiver
 
 # Sigma hyperparameters
 SIGMA_MIN="1e-2"
-SIGMA_MAX="1.5"
-N_SIGMAS=20
+SIGMA_MAX="50"
+N_SIGMAS=1000
 SIGMA_SCHEDULE="log"
 
 IMG_SIZE=64
 # Model hyperparameters
-BASE_CH=128
-CHANNEL_MULTS="1,2,2,4,4"
+BASE_CH=64
+CHANNEL_MULTS="1,1,2,2,4,4"
 
 # ---- Env ----
 source ~/.venvs/testpip/bin/activate

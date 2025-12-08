@@ -14,23 +14,23 @@ mkdir -p runs
 
 # ---- Hyperparameters ----
 LR="1e-4"
-EPOCHS=40
+EPOCHS=60
 BATCH_SIZE=32
 EXP_NAME="comparaison"
-EVAL_EVERY=100
+EVAL_EVERY=1000
 NUM_WORKERS=4
 GRAD_CLIP=1  # 0 pour désactiver
 
 # Sigma hyperparameters (VE SDE: sigma(t) in [SIGMA_MIN, SIGMA_MAX])
 SIGMA_MIN="1e-2"
-SIGMA_MAX="1.5"
+SIGMA_MAX="50"
 
 SIGMA_EMB_DIM=16
 IMG_SIZE=64
 
 # Model hyperparameters
-BASE_CH=128
-CHANNEL_MULTS="1,2,2,4,4"
+BASE_CH=64
+CHANNEL_MULTS="1,1,2,2,4,4"
 
 # ---- Env ----
 source ~/.venvs/testpip/bin/activate
