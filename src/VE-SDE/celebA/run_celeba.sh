@@ -21,15 +21,14 @@ EVAL_EVERY=1000
 NUM_WORKERS=4
 GRAD_CLIP=1  # 0 pour désactiver
 
-# Sigma hyperparameters (VE SDE: sigma(t) in [SIGMA_MIN, SIGMA_MAX])
 SIGMA_MIN="1e-2"
-SIGMA_MAX="50"
+SIGMA_MAX="20"
 
 SIGMA_EMB_DIM=16
 IMG_SIZE=64
 
 # Model hyperparameters
-BASE_CH=64
+BASE_CH=128
 CHANNEL_MULTS="1,1,2,2,4,4"
 
 # ---- Env ----

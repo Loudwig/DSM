@@ -4,9 +4,10 @@ import argparse
 import os
 import json
 import shutil
+import copy  # EMA
 
 import matplotlib
-matplotlib.use("Agg")  # for headless HPC
+matplotlib.use("Agg")  # pour le headless HPC
 import matplotlib.pyplot as plt
 
 import torch
@@ -14,82 +15,48 @@ import numpy as np
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
-import models as m  # your SmallUNetSigma etc.
-
-# -------------------------
-# Global config
-# -------------------------
+import models as m  
 
 CELEBA_ROOT = "data/celeba"
 device = torch.device("cpu")
 
 
-# -------------------------
-# Utils
-# -------------------------
-
-def LossNCSN(model, x, sigmas, return_per_sigma=False):
+def LossVE_SDE(model, x, sigma_min, sigma_max):
     B = x.size(0)
     device_x = x.device
-    n_sigmas = len(sigmas)
 
-    idx = torch.randint(0, n_sigmas, (B,), device=device_x)
-    sigma_vals = sigmas[idx]  # (B,)
+    t_uniform = torch.rand(B, device=device_x)  # (B,)
 
-    sigma_noise = sigma_vals.view(B, 1, 1, 1)
+    log_sigma_min = torch.log(torch.tensor(sigma_min, device=device_x))
+    log_sigma_max = torch.log(torch.tensor(sigma_max, device=device_x))
+    log_sigma_t = log_sigma_min + t_uniform * (log_sigma_max - log_sigma_min)
+    sigma_t = torch.exp(log_sigma_t)  # (B,)
+
+    sigma_t_broadcast = sigma_t.view(B, 1, 1, 1)
 
     eps = torch.randn_like(x)
-    x_noisy = x + sigma_noise * eps
+    x_t = x + sigma_t_broadcast * eps
 
-    s_hat = model(x_noisy, sigma_vals.view(B, 1))
-    target = -eps / (sigma_noise + 1e-8)
+    sigma_input = sigma_t.view(B, 1)  # (B,1)
+    s_hat = model(x_t, sigma_input)
+
+    target = -eps / (sigma_t_broadcast + 1e-8)
+
+    w = (sigma_t ** 2).view(B, 1, 1, 1)
+
     residual = (s_hat - target) ** 2
-
-    w = (sigma_vals ** 2).view(B, 1, 1, 1)
-
-    # loss par sample (B,)
     loss_per_sample = (w * residual).view(B, -1).mean(dim=1)
     loss = loss_per_sample.mean()
-
-    if not return_per_sigma:
-        return loss
-
-    # somme des losses par niveau + compteur par niveau (detach -> pas de grad)
-    loss_sum = torch.zeros(n_sigmas, device=device_x)
-    count_sum = torch.zeros(n_sigmas, device=device_x)
-
-    loss_sum.index_add_(0, idx, loss_per_sample.detach())
-    count_sum.index_add_(0, idx, torch.ones_like(loss_per_sample))
-
-    return loss, loss_sum.cpu(), count_sum.cpu()
-
-
-def t(x):
-    return torch.as_tensor(x, dtype=torch.get_default_dtype()).to(device)
-
-
-def construct_noise_linspace(min_val, max_val, L):
-    return torch.linspace(min_val, max_val, L).flip(0).to(device)
-
-
-def construct_noise_logspace(sigma_min, sigma_max, L):
-    return torch.logspace(
-        torch.log10(t(sigma_min)),
-        torch.log10(t(sigma_max)), L
-    ).flip(0).to(device)
+    return loss
 
 
 def parse_int_list(s: str):
     return [int(x) for x in s.split(",") if x.strip() != ""]
 
 
-# -------------------------
-# Argparse
-# -------------------------
-
 def get_args():
     parser = argparse.ArgumentParser(
-        description="Score-based model on CelebA (train only)"
+        description="Score-based VE-SDE model on CelebA (train only)"
     )
 
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -100,29 +67,45 @@ def get_args():
     parser.add_argument("--no-save", action="store_true")
     parser.add_argument("--num-workers", type=int, default=4)
 
-    # NEW: gradient clipping
-    parser.add_argument("--grad-clip", type=float, default=1.0,
-                        help="max_norm for clip_grad_norm_. Set 0 to disable.")
+    parser.add_argument(
+        "--grad-clip",
+        type=float,
+        default=1.0,
+        help="max_norm for clip_grad_norm_. Set 0 to disable."
+    )
 
-    # Sigma hyperparameters
     parser.add_argument("--sigma-min", type=float, default=1e-1)
     parser.add_argument("--sigma-max", type=float, default=0.5)
-    parser.add_argument("--n-sigmas", type=int, default=10)
-    parser.add_argument("--sigma-schedule", type=str, default="lin",
-                        choices=["lin", "log"])
-    
-    # Model hyperparameters
+
     parser.add_argument("--base-ch", type=int, default=64)
     parser.add_argument("--channel-mults", type=str, default="1,2,4")
-    parser.add_argument("--img-size",type=int,default=32)
+    parser.add_argument("--sigma-emb-dim", type=int, default=16)
+    parser.add_argument("--img-size", type=int, default=128)
 
+    # EMA
+    parser.add_argument(
+        "--ema-decay",
+        type=float,
+        default=0.999,
+        help="EMA decay (<=0 pour désactiver l'EMA)."
+    )
+
+    # Sauvegarde epoch : tous les k epochs à partir d'une fraction du training
+    parser.add_argument(
+        "--save-epoch-interval",
+        type=int,
+        default=5,
+        help="Sauvegarder les poids tous les k epochs (après le démarrage)."
+    )
+    parser.add_argument(
+        "--save-epoch-start-frac",
+        type=float,
+        default=0.5,
+        help="Fraction du nombre total d'epochs à partir de laquelle on commence à sauvegarder."
+    )
 
     return parser.parse_args()
 
-
-# -------------------------
-# Main
-# -------------------------
 
 def main(args):
     global device
@@ -173,13 +156,13 @@ def main(args):
         FIG_DIR = os.path.join(RUN_DIR, "figures")
         WEIGHTS_DIR = os.path.join(RUN_DIR, "weights")
         LOGS_DIR = os.path.join(RUN_DIR, "logs")
+
         os.makedirs(FIG_DIR, exist_ok=True)
         os.makedirs(WEIGHTS_DIR, exist_ok=True)
         os.makedirs(LOGS_DIR, exist_ok=True)
     else:
         FIG_DIR = WEIGHTS_DIR = LOGS_DIR = None
 
-    # Move SLURM out/err into RUN_DIR
     job_name = os.environ.get("SLURM_JOB_NAME")
     job_id = os.environ.get("SLURM_JOB_ID")
     if SAVE and job_name and job_id:
@@ -196,10 +179,9 @@ def main(args):
                 except Exception as e:
                     print(f"Could not move {src} to {dst}: {e}")
 
-    
-    
-    # Dataset
     img_size = args.img_size
+    print(f"Image size: {img_size}")
+
     transform = transforms.Compose([
         transforms.CenterCrop(178),
         transforms.Resize(img_size),
@@ -211,7 +193,6 @@ def main(args):
         root=CELEBA_ROOT,
         transform=transform,
     )
-
     print("CelebA root:", CELEBA_ROOT)
     print("Nb d'images :", len(full_data))
 
@@ -223,7 +204,6 @@ def main(args):
         pin_memory=torch.cuda.is_available()
     )
 
-    # Training config
     batch_size = args.batch_size
     N_EPOCH = args.epochs
     EVAL_EVERY = args.eval_every
@@ -232,23 +212,14 @@ def main(args):
 
     sigma_min = args.sigma_min
     sigma_max = args.sigma_max
-    n_sigmas = args.n_sigmas
-    sigma_schedule = args.sigma_schedule
 
-    if sigma_schedule == "log":
-        sigmas = construct_noise_logspace(sigma_min, sigma_max, n_sigmas)
-    elif sigma_schedule == "lin":
-        sigmas = construct_noise_linspace(sigma_min, sigma_max, n_sigmas)
-    else:
-        raise ValueError(f"Unknown SIGMA_SCHEDULE: {sigma_schedule}")
+    print(f"Sigma hyperparams: min={sigma_min}, max={sigma_max}")
 
     in_ch = 3
     base_ch = args.base_ch
     channel_mults = tuple(parse_int_list(args.channel_mults))
-    SIGMA_EMB_DIM = 16
+    sigma_emb_dim = args.sigma_emb_dim
 
-    print(f"Sigma schedule: {sigma_schedule}, "
-          f"min={sigma_min}, max={sigma_max}, n={n_sigmas}")
     print(f"Model: base_ch={base_ch}, channel_mults={channel_mults}")
     print(f"Grad clip max_norm: {grad_clip}")
 
@@ -256,12 +227,28 @@ def main(args):
         in_ch=in_ch,
         base_ch=base_ch,
         channel_mults=channel_mults,
-        emb_dim=SIGMA_EMB_DIM,
+        emb_dim=sigma_emb_dim,
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr,amsgrad=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, amsgrad=True)
 
-    # Save hyperparams
+    ema_decay = args.ema_decay
+    if ema_decay is not None and ema_decay > 0.0:
+        ema_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+        print(f"EMA activée avec decay={ema_decay}")
+    else:
+        ema_state = None
+        print("EMA désactivée (ema_decay <= 0).")
+
+    # Config de sauvegarde par epoch
+    save_interval = max(1, args.save_epoch_interval)
+    save_start_frac = args.save_epoch_start_frac
+    save_start_epoch = max(1, int(np.ceil(save_start_frac * N_EPOCH)))
+    print(
+        f"Sauvegarde epoch: tous les {save_interval} epochs "
+        f"à partir de l'epoch {save_start_epoch} (sur {N_EPOCH})"
+    )
+
     if SAVE:
         hparams = {
             "batch_size": batch_size,
@@ -269,110 +256,99 @@ def main(args):
             "EVAL_EVERY": EVAL_EVERY,
             "lr": lr,
             "grad_clip": grad_clip,
-            'img_size' : img_size,
             "sigma": {
-                "schedule": sigma_schedule,
                 "min": sigma_min,
-                "max": sigma_max,
-                "n_sigmas": n_sigmas,
-                "values": [float(s) for s in sigmas],
+                "max": sigma_max, 
             },
+            "ema_decay": ema_decay,
+            "save_epoch_interval": save_interval,
+            "save_epoch_start_frac": save_start_frac,
             "device": str(device),
             "model": {
                 "in_channel": in_ch,
                 "base_ch": base_ch,
                 "channel_mults": list(channel_mults),
-                "sigma_emb_dim": SIGMA_EMB_DIM,
+                "sigma_emb_dim": sigma_emb_dim,
             },
             "celeba_root": CELEBA_ROOT,
+            "img_size": img_size,
             "slurm": {
                 "job_name": job_name,
                 "job_id": job_id,
             },
         }
-
         with open(os.path.join(LOGS_DIR, "hparams.json"), "w") as f:
             json.dump(hparams, f, indent=4)
 
     total = sum(p.numel() for p in model.parameters())
     print(f"{total/1e6:.2f} M params")
 
-    # -------------------------
-    # Training loop
-    # -------------------------
     model.train()
     L = []
     eval_steps = []
     step = 0
 
-    # NEW: running loss per sigma (sur la fenêtre EVAL_EVERY)
-    loss_sigma_running = torch.zeros(n_sigmas)
-    count_sigma_running = torch.zeros(n_sigmas)
-    L_sigma_history = []   # liste de vecteurs (n_sigmas,) à chaque eval
-
     for epoch in range(N_EPOCH):
         for u, (x, _) in enumerate(dataloader):
             step += 1
-
             x = x.to(device)
+
             optimizer.zero_grad()
-
-            # NEW: on récupère somme+count par sigma
-            loss, loss_sigma_sum, count_sigma_sum = LossNCSN(
-                model, x, sigmas, return_per_sigma=True
-            )
-
+            loss = LossVE_SDE(model, x, sigma_min, sigma_max)
             loss.backward()
 
-            # NEW: gradient clipping
             if grad_clip is not None and grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
             optimizer.step()
-            L.append(loss.item())
 
-            # accumulate per-sigma stats (CPU tensors)
-            loss_sigma_running += loss_sigma_sum
-            count_sigma_running += count_sigma_sum
+            if ema_state is not None:
+                with torch.no_grad():
+                    for name, param in model.named_parameters():
+                        ema_param = ema_state[name]
+                        ema_param.mul_(ema_decay).add_(param.data, alpha=1.0 - ema_decay)
+
+            L.append(loss.item())
 
             if (step) % EVAL_EVERY == 0:
                 model.eval()
                 eval_steps.append(step + 1)
-
                 print(
                     f"[step : {step} | epoch : {epoch}] "
-                    f"train loss (last {EVAL_EVERY}) = {np.mean(L[-EVAL_EVERY:]):.4f}"
+                    f"train loss (last {EVAL_EVERY}) = "
+                    f"{np.mean(L[-EVAL_EVERY:]):.4f}"
                 )
-
-                # NEW: mean loss per sigma sur la fenêtre
-                mean_sigma = (loss_sigma_running /
-                              (count_sigma_running + 1e-8)).numpy()
-                L_sigma_history.append(mean_sigma)
-
-                # reset window accumulators
-                loss_sigma_running.zero_()
-                count_sigma_running.zero_()
-
                 if SAVE:
-                    torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model.pt"))
                     np.save(os.path.join(LOGS_DIR, "train_loss.npy"), np.array(L))
                     np.save(os.path.join(LOGS_DIR, "steps_eval.npy"), np.array(eval_steps))
-                    np.save(os.path.join(LOGS_DIR, "train_loss_per_sigma.npy"),
-                            np.array(L_sigma_history))
-                    np.save(os.path.join(LOGS_DIR, "sigmas.npy"),
-                            sigmas.detach().cpu().numpy())
-
                 model.train()
+
+        # ---- fin d'epoch ----
+        epoch_idx = epoch + 1
+
+        # 1) Toujours sauvegarder model.pt (overwrite)
+        if SAVE:
+            torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model.pt"))
+            if ema_state is not None:
+                torch.save(ema_state, os.path.join(WEIGHTS_DIR, "model_ema.pt"))
+
+        # 2) Sauvegarde conditionnelle de checkpoints supplémentaires
+        if SAVE and epoch_idx >= save_start_epoch:
+            if (epoch_idx - save_start_epoch) % save_interval == 0:
+                ckpt_name = f"model_epoch{epoch_idx:03d}.pt"
+                torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, ckpt_name))
+                if ema_state is not None:
+                    ckpt_name_ema = f"model_ema_epoch{epoch_idx:03d}.pt"
+                    torch.save(ema_state, os.path.join(WEIGHTS_DIR, ckpt_name_ema))
 
     # Final save
     if SAVE:
         np.save(os.path.join(LOGS_DIR, "train_loss.npy"), np.array(L))
-        np.save(os.path.join(LOGS_DIR, "steps_eval.npy"), np.array(eval_steps))
-        np.save(os.path.join(LOGS_DIR, "train_loss_per_sigma.npy"),
-                np.array(L_sigma_history))
-        np.save(os.path.join(LOGS_DIR, "sigmas.npy"),
-                sigmas.detach().cpu().numpy())
-        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model.pt"))
+        np.save(os.path.join(LOGS_DIR, "steps_eval.npy"),
+                np.array(eval_steps))
+        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model_final.pt"))
+        if ema_state is not None:
+            torch.save(ema_state, os.path.join(WEIGHTS_DIR, "model_ema_final.pt"))
 
 
 if __name__ == "__main__":

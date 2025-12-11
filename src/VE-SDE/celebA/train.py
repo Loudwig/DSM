@@ -239,7 +239,7 @@ def main(args):
         emb_dim=sigma_emb_dim,
     ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr,amsgrad=True)
     # If you want weight decay: use AdamW(..., weight_decay=1e-4)
 
     # Save hyperparams
@@ -305,9 +305,26 @@ def main(args):
                     f"{np.mean(L[-EVAL_EVERY:]):.4f}"
                 )
                 if SAVE:
-                    np.save(os.path.join(LOGS_DIR, "train_loss.npy"),np.array(L))
-                    np.save(os.path.join(LOGS_DIR, "steps_eval.npy"),np.array(eval_steps))
-                    torch.save(model.state_dict(),os.path.join(WEIGHTS_DIR, "model.pt"))
+                    np.save(os.path.join(LOGS_DIR, "train_loss.npy"), np.array(L))
+                    np.save(os.path.join(LOGS_DIR, "steps_eval.npy"), np.array(eval_steps))
+
+                    # checkpoint "courant" écrasé comme avant
+                    torch.save(model.state_dict(),
+                            os.path.join(WEIGHTS_DIR, "model.pt"))
+
+                    # *** nouveau : snapshot à partir de N_EPOCH - 5 ***
+                    if epoch >= N_EPOCH - 5:
+                        ckpt_name = f"model_epoch{epoch:03d}_step{step:06d}.pt"
+                        torch.save(
+                            model.state_dict(),
+                            os.path.join(WEIGHTS_DIR, ckpt_name)
+                        )
+                    if epoch ==35 : 
+                        ckpt_name = f"model_epoch{epoch:03d}_step{step:06d}.pt"
+                        torch.save(
+                            model.state_dict(),
+                            os.path.join(WEIGHTS_DIR, ckpt_name)
+                        )
                 model.train()
 
     # Final save
@@ -315,7 +332,7 @@ def main(args):
         np.save(os.path.join(LOGS_DIR, "train_loss.npy"), np.array(L))
         np.save(os.path.join(LOGS_DIR, "steps_eval.npy"),
                 np.array(eval_steps))
-        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model.pt"))
+        torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "model_final.pt"))
 
 
 if __name__ == "__main__":
