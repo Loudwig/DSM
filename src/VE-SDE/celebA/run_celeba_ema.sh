@@ -14,8 +14,8 @@ mkdir -p runs
 
 # ---- Hyperparameters ----
 LR="1e-4"
-EPOCHS=70
-BATCH_SIZE=64
+EPOCHS=80
+BATCH_SIZE=32
 EXP_NAME="comparaison"
 EVAL_EVERY=1000
 NUM_WORKERS=4
@@ -25,11 +25,11 @@ SIGMA_MIN="1e-2"
 SIGMA_MAX="40"
 
 SIGMA_EMB_DIM=16
-IMG_SIZE=64
+IMG_SIZE=128
 
 # Model hyperparameters
 BASE_CH=128
-CHANNEL_MULTS="1,1,2,2,4,4"
+CHANNEL_MULTS="1,1,2,2,4,4,4"
 
 # EMA + epoch checkpointing
 EMA_DECAY=0.999                 # VE-SDE typical
